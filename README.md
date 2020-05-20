@@ -459,33 +459,203 @@ join trip on trip.trip_no = pass_in_trip.trip_no
 join company on company.id_comp = trip.id_comp
 where month(date) = 4 and year(date) = 2003
 group by company.name
+##### #85. Найти производителей, которые выпускают только принтеры или только PC. При этом искомые производители PC должны выпускать не менее 3 моделей.
+*РЕШЕНИЕ НЕ МОЕ*
+select maker from ( select maker from product where type='printer'  except
+select maker from product where type='laptop' except select maker from product where type='pc' ) as T
+union
+select maker from ( select maker from product inner join pc on pc.model=product.model group by maker
+having count(maker)>=3 except select maker from product where type='laptop' except
+select maker from product where type='printer' ) as S
+##### #86. Для каждого производителя перечислить в алфавитном порядке с разделителем "/" все типы выпускаемой им продукции. Вывод: maker, список типов продукции
+select maker,
+case count(distinct type)
+when 2 then min(type) + '/' + max(type)
+when 1 then max(type)
+when 3 then 'laptop/PC/printer'
+end
+from product
+group by maker
+order by maker
+##### #87. Считая, что пункт самого первого вылета пассажира является местом жительства, найти не москвичей, которые прилетали в Москву более одного раза. Вывод: имя пассажира, количество полетов в Москву
 
+##### #88. Среди тех, кто пользуется услугами только одной компании, определить имена разных пассажиров, летавших чаще других. Вывести: имя пассажира, число полетов и название компании.
 
+##### #89. Найти производителей, у которых больше всего моделей в таблице Product, а также тех, у которых меньше всего моделей. Вывод: maker, число моделей
+select distinct maker, count(model) from product
+group by maker
+having count(model) in
+(select max(ma.cnt) from (select distinct maker, count(model) as cnt  from product group by maker) as ma
+union
+select min (mi.cnt) from (select distinct maker, count(model) as cnt from product group by maker) as mi)
+##### #90. Вывести все строки из таблицы Product, кроме трех строк с наименьшими номерами моделей и трех строк с наибольшими номерами моделей.
+select * from product
+where model not in
+(select top 3 with ties model from product order by model desc
+union
+select top 3 with ties model from product order by model)
+##### #91. C точностью до двух десятичных знаков определить среднее количество краски на квадрате.
 
+##### #92. Выбрать все белые квадраты, которые окрашивались только из баллончиков, пустых к настоящему времени. Вывести имя квадрата
 
+##### #93. Для каждой компании, перевозившей пассажиров, подсчитать время, которое провели в полете самолеты с пассажирами. Вывод: название компании, время в минутах.
+with passtrip as
+(select distinct  t.id_comp, date, time_out, time_in
+from
+pass_in_trip pass
+join
+(select distinct trip_no, time_out, time_in , id_comp from trip ) t
+on
+t.trip_no = pass.trip_no
+GROUP BY date, time_out, time_in, t.id_comp)
 
+select distinct company.name,  
+sum(case
+when datediff(mi,  passtrip.time_out, passtrip.time_in) > 0 then datediff (mi, passtrip.time_out,  passtrip.time_in)
+when datediff(mi, passtrip.time_out,  passtrip.time_in) <=0  then datediff (mi, passtrip.time_out,  passtrip.time_in + 1)
+end ) time
+from passtrip
+left join
+company
+on
+passtrip.id_comp = company.id_comp
+group by company.name
+##### #94. Для семи последовательных дней, начиная от минимальной даты, когда из Ростова было совершено максимальное число рейсов, определить число рейсов из Ростова. Вывод: дата, количество рейсов
 
+##### #95. На основании информации из таблицы Pass_in_Trip, для каждой авиакомпании определить: 1) количество выполненных перелетов; 2) число использованных типов самолетов; 3) количество перевезенных различных пассажиров; 4) общее число перевезенных компанией пассажиров. Вывод: Название компании, 1), 2), 3), 4).
+select name, 
+COUNT(DISTINCT CONVERT(CHAR(24),date)+CONVERT(CHAR(4),pit.trip_no)) "1",
+count(distinct t.plane) "2",
+count(distinct pit.id_psg) "3",
+count (pit.id_psg) "4"
+from trip t
+join pass_in_trip pit on
+pit.trip_no = t.trip_no
+join company c
+on t.id_comp = c.id_comp
+group by name
+##### #96. При условии, что баллончики с красной краской использовались более одного раза, выбрать из них такие, которыми окрашены квадраты, имеющие голубую компоненту. Вывести название баллончика
 
+##### #97. Отобрать из таблицы Laptop те строки, для которых выполняется следующее условие: значения из столбцов speed, ram, price, screen возможно расположить таким образом, что каждое последующее значение будет превосходить предыдущее в 2 раза или более. Замечание: все известные характеристики ноутбуков больше нуля. Вывод: code, speed, ram, price, screen.
 
+##### #98. Вывести список ПК, для каждого из которых результат побитовой операции ИЛИ, примененной к двоичным представлениям скорости процессора и объема памяти, содержит последовательность из не менее четырех идущих подряд единичных битов. Вывод: код модели, скорость процессора, объем памяти.
 
+##### #99. Рассматриваются только таблицы Income_o и Outcome_o. Известно, что прихода/расхода денег в воскресенье не бывает. Для каждой даты прихода денег на каждом из пунктов определить дату инкассации по следующим правилам: 1. Дата инкассации совпадает с датой прихода, если в таблице Outcome_o нет записи о выдаче денег в эту дату на этом пункте. 2. В противном случае - первая возможная дата после даты прихода денег, которая не является воскресеньем и в Outcome_o не отмечена выдача денег сдатчикам вторсырья в эту дату на этом пункте. Вывод: пункт, дата прихода денег, дата инкассации.
 
+##### #100. Написать запрос, который выводит все операции прихода и расхода из таблиц Income и Outcome в следующем виде: дата, порядковый номер записи за эту дату, пункт прихода, сумма прихода, пункт расхода, сумма расхода. При этом все операции прихода по всем пунктам, совершённые в течение одного дня, упорядочены по полю code, и так же все операции расхода упорядочены по полю code. В случае, если операций прихода/расхода за один день было не равное количество, выводить NULL в соответствующих колонках на месте недостающих операций.
+*Решение не мое*
+select distinct all_opp.date, all_opp.DayInc, all_inc.point, all_inc.inc, all_out.point , all_out.out
 
+from (select distinct date, ROW_Number() OVER(PARTITION BY date ORDER BY code asc) as DayInc from Income
+union
+select distinct date, ROW_Number() OVER(PARTITION BY date ORDER BY code asc) from Outcome) all_opp
 
+left join (select date, point, inc, ROW_Number() OVER(PARTITION BY date ORDER BY code asc) as IncDay from Income) all_inc
+on all_inc.date = all_opp.date and all_inc.IncDay = all_opp.DayInc
+left join (select date, point, out, ROW_Number() OVER(PARTITION BY date ORDER BY code asc) as OutDay from Outcome ) all_out
+on all_out.date = all_opp.date and all_out.OutDay = all_opp.DayInc
+##### #101. Таблица Printer сортируется по возрастанию поля code. Упорядоченные строки составляют группы: первая группа начинается с первой строки, каждая строка со значением color='n' начинает новую группу, группы строк не перекрываются. Для каждой группы определить: наибольшее значение поля model (max_model), количество уникальных типов принтеров (distinct_types_cou) и среднюю цену (avg_price). Для всех строк таблицы вывести: code, model, color, type, price, max_model, distinct_types_cou, avg_price.
+SELECT code, model, color, type, price,
+MAX(model)OVER(PARTITION BY Grp)max_model,
+max(case type when 'Laser' then 1 else 0 end) over (partition by grp) + 
+max(case type when 'Matrix' then 1 else 0 end) over (partition by grp) +
+max(case type when 'Jet' then 1 else 0 end) over (partition by grp) distinct_types,
+avg(price) over (partition by grp)
+from(
+select *,
+case color when 'n' then 0 else row_number() over (order by code) end +
+case color when 'n' then 1 else -1 end * row_number () over (partition by color order by code)grp
+from Printer) T
+##### #102. Определить имена разных пассажиров, которые летали только между двумя городами (туда и/или обратно).
+1) select name from passenger
+where id_psg in
+(
+select id_psg from trip t,pass_in_trip pit
+where t.trip_no=pit.trip_no
+group by id_psg
+having count(distinct case when town_from<=town_to then town_from+town_to else town_to+town_from end)=1
+)
+2) OK , НО НЕ ПРОШЕЛ ПРОВЕРОЧНУЮ ПРОВЕРКУ
+select z.name from(
+select p.name, t.town_to town
+from trip t
+join pass_in_trip pit
+on pit.trip_no = t.trip_no
+join passenger p on
+p.id_psg = pit.id_psg
+union 
+select p.name, t.town_from town
+from trip t
+join pass_in_trip pit
+on pit.trip_no = t.trip_no
+join passenger p on
+p.id_psg = pit.id_psg) z
+group by z.name
+having count(town) < 3
+##### #103. Выбрать три наименьших и три наибольших номера рейса. Вывести их в шести столбцах одной строки, расположив в порядке от наименьшего к наибольшему. Замечание: считать, что таблица Trip содержит не менее шести строк.
+select min(t.trip_no), min(tt.trip_no), min(ttt.trip_no), max(t.trip_no), max(tt.trip_no), max(ttt.trip_no)
+from trip t, trip tt, trip ttt
+where t.trip_no < tt.trip_no and tt.trip_no < ttt.trip_no and ttt.trip_no > t.trip_no
+##### #104. Для каждого класса крейсеров, число орудий которого известно, пронумеровать (последовательно от единицы) все орудия. Вывод: имя класса, номер орудия в формате 'bc-N'.
 
+##### #105. Статистики Алиса, Белла, Вика и Галина нумеруют строки у таблицы Product. Все четверо упорядочили строки таблицы по возрастанию названий производителей. Алиса присваивает новый номер каждой строке, строки одного производителя она упорядочивает по номеру модели. Трое остальных присваивают один и тот же номер всем строкам одного производителя. Белла присваивает номера начиная с единицы, каждый следующий производитель увеличивает номер на 1. У Вики каждый следующий производитель получает такой же номер, какой получила бы первая модель этого производителя у Алисы. Галина присваивает каждому следующему производителю тот же номер, который получила бы его последняя модель у Алисы. Вывести: maker, model, номера строк получившиеся у Алисы, Беллы, Вики и Галины соответственно.
+select maker, model,
+row_number() over(order by maker, model) A, 
+dense_rank() over(order by maker) B,
+rank() over(order by maker) C,
+count(*) over(order by maker) D
+from product
+order by maker,model
+##### #106. Пусть v1, v2, v3, v4, ... представляет последовательность вещественных чисел - объемов окрасок b_vol, упорядоченных по возрастанию b_datetime, b_q_id, b_v_id. Найти преобразованную последовательность P1=v1, P2=v1/v2, P3=v1/v2*v3, P4=v1/v2*v3/v4, ..., где каждый следующий член получается из предыдущего умножением на vi (при нечетных i) или делением на vi (при четных i). Результаты представить в виде b_datetime, b_q_id, b_v_id, b_vol, Pi, где Pi - член последовательности, соответствующий номеру записи i. Вывести Pi с 8-ю знаками после запятой.
 
+##### #107. Для пятого по счету пассажира из числа вылетевших из Ростова в апреле 2003 года определить компанию, номер рейса и дату вылета. Замечание. Считать, что два рейса одновременно вылететь из Ростова не могут.
+1) select name, trip_no, date
+from
+(select row_number() over(order by pit.date, t.time_out, pit.id_psg) as num, c.name, t.trip_no, pit.date
+from
+company c
+join trip t on c.id_comp = t.id_comp
+join pass_in_trip pit on pit.trip_no = t.trip_no
+where t.town_from = 'Rostov' and year(pit.date) = 2003 and month(pit.date) = 4) t1
+where num = 5
 
+2)select tt.name, pit.trip_no, pit.date from pass_in_trip pit,
 
+(select *, 
+(select name from company c where t.id_comp = c.id_comp) name
+from trip t
+where town_from = 'Rostov') tt
 
+where pit.trip_no = tt.trip_no
+and date between '2003-04-01' and '2003-04-30'
+order by date offset 4 rows fetch next 1 rows only
+##### #108. Реставрация экспонатов секции "Треугольники" музея ПФАН проводилась согласно техническому заданию. Для каждой записи таблицы utb малярами подкрашивалась сторона любой фигуры, если длина этой стороны равнялась b_vol. Найти окрашенные со всех сторон треугольники, кроме равносторонних, равнобедренных и тупоугольных. Для каждого треугольника (но без повторений) вывести три значения X, Y, Z, где X - меньшая, Y - средняя, а Z - большая сторона.
 
+##### #109. Вывести: 1. Названия всех квадратов черного или белого цвета. 2. Общее количество белых квадратов. 3. Общее количество черных квадратов.
 
-
-
-
-
-
-
-
-
+##### #110. Определить имена разных пассажиров, когда-либо летевших рейсом, который вылетел в субботу, а приземлился в воскресенье.
+select name from passenger where id_psg in
+(select pit.id_psg
+from
+trip t
+join
+pass_in_trip pit
+on pit.trip_no = t.trip_no
+and DATEPART(dw, pit.date) = 7
+and time_out > time_in
+)
+##### #114. Определить имена разных пассажиров, которым чаще других доводилось лететь на одном и том же месте. Вывод: имя и количество полетов на одном и том же месте.
+1) *OK*
+WITH b AS
+(SELECT ID_psg, COUNT(*) as cnt FROM Pass_In_Trip GROUP BY ID_psg, place),
+b1 AS
+(SELECT DISTINCT ID_psg, cnt FROM b WHERE cnt =(SELECT MAX(cnt) FROM b))
+SELECT name, cnt FROM b1 JOIN Passenger p ON (b1.ID_psg = p.ID_psg)
+2) *OK НО НЕ ПРОВЕРОЧНАЯ БАЗА*
+select distinct top 1 with ties name, count(trip_no) trip_no from pass_in_trip pit
+join passenger p on p.id_psg = pit.id_psg
+group by name, pit.place
+order by trip_no desc
 
 
 
