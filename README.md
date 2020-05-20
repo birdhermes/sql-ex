@@ -153,6 +153,341 @@ union
 select outcomes.ship, outcomes.ship from outcomes) as s on classes.class = s.class 
 group by classes.class
 having count (s.name) = 1
+##### #38. Найдите страны, имевшие когда-либо классы обычных боевых кораблей ('bb') и имевшие когда-либо классы крейсеров ('bc').
+select country from classes where type= 'bb' 
+intersect 
+select country from classes where type= 'bc'
+##### #39. Найдите корабли, `сохранившиеся для будущих сражений`; т.е. выведенные из строя в одной битве (damaged), они участвовали в другой, произошедшей позже.
+select distinct outcomes.ship from outcomes left join battles as b on outcomes.battle = b.name where outcomes.result = 'damaged' and 
+exists
+(select outcomes.ship from  outcomes as ou left join battles as ba on ou.battle=ba.name  where ou.ship = outcomes.ship  and b.date < ba.date  
+)
+##### #40. Найти производителей, которые выпускают более одной модели, при этом все выпускаемые производителем модели являются продуктами одного типа. Вывести: maker, type
+Select distinct cl.class, sh.name, cl.country from classes as cl right join ships as sh on cl.class = sh.class where cl.numGuns >= 10
+group by
+cl.class, sh.name, cl.country
+##### #41. *OK не прошло проверное тестирование* Для каждого производителя, у которого присутствуют модели хотя бы в одной из таблиц PC, Laptop или Printer, определить максимальную цену на его продукцию. Вывод: имя производителя, если среди цен на продукцию данного производителя присутствует NULL, то выводить для этого производителя NULL, иначе максимальную цену
+select distinct maker, case s.price
+when NULL
+then'NULL'
+else max(s.price)
+end 'max_price'
+from product left join 
+(select model, price from pc
+union
+select model, price from laptop
+union
+select model, price from printer) s
+on product.model = s.model
+group by maker
+##### #42. Найдите названия кораблей, потопленных в сражениях, и название сражения, в котором они были потоплены.
+Select ship, battle from outcomes where result = 'sunk'
+##### #43. Укажите сражения, которые произошли в годы, не совпадающие ни с одним из годов спуска кораблей на воду
+select distinct name  as years from battles where year(date) not in (select launched  from ships where launched is not null)
+##### #44. Найдите названия всех кораблей в базе данных, начинающихся с буквы R.
+Select distinct name from ships where name like 'R%'
+union
+Select distinct ship from outcomes where ship like 'R%'
+##### #45. Найдите названия всех кораблей в базе данных, состоящие из трех и более слов (например, King George V). Считать, что слова в названиях разделяются единичными пробелами, и нет концевых пробелов.
+Select name from ships where name like '% % %'
+union 
+select ship from outcomes where ship like '% % %'
+##### #46. Для каждого корабля, участвовавшего в сражении при Гвадалканале (Guadalcanal), вывести название, водоизмещение и число орудий.
+select name as n, displacement as d, numguns as ng 
+from ships inner join classes on ships.class=classes.class 
+where name in (select ship from outcomes where battle = 'Guadalcanal')   
+union 
+select ship as n, displacement as d, numguns as ng 
+from outcomes inner join classes on outcomes.ship=classes.class 
+where battle = 'Guadalcanal' and ship not in (select name from ships)   
+union  
+select ship as n, null as d, null as ng from outcomes 
+where battle = 'Guadalcanal' and ship not in (select name from ships) 
+and ship not in  (select class from classes)
+##### #47. Определить страны, которые потеряли в сражениях все свои корабли.
+1) МОЙ ВАРИАНТ. ОК, НО НЕ ПРИНЯТ ПРОВЕРОЧНОЙ СИСТЕМОЙ
+SELECT country from classes where class in(
+select s.name as ship from CLASSES C inner JOIN SHIPS S ON C.CLASS = S.CLASS
+where s.name in (select distinct ship from classes c inner join outcomes o on o.ship = c.class where result like 'sunk')
+union
+select ship from classes c inner join outcomes o on o.ship = c.class 
+where result like 'sunk'
+)
+
+2) НЕ МОЙ ВАРИАНТ:
+WITH T1 AS ( SELECT COUNT(name) as co, country FROM
+(SELECT name, country FROM Classes INNER JOIN Ships ON Ships.class = Classes.class
+UNION
+SELECT ship, country FROM Classes INNER JOIN Outcomes ON Outcomes.ship = Classes.class) FR1
+GROUP BY country
+),
+
+T2 AS ( SELECT COUNT(name) as co, country FROM ( SELECT name, country FROM Classes INNER JOIN Ships ON Ships.class = Classes.class
+WHERE name IN (SELECT DISTINCT ship FROM Outcomes WHERE result LIKE 'sunk')
+UNION
+SELECT ship, country FROM Classes INNER JOIN Outcomes ON Outcomes.ship = Classes.class
+WHERE ship IN (SELECT DISTINCT ship FROM Outcomes WHERE result LIKE 'sunk')
+) FR2 GROUP BY country )
+
+SELECT T1.country FROM T1
+INNER JOIN T2 ON T1.co = t2.co and t1.country = t2.country
+##### #48. Найдите классы кораблей, в которых хотя бы один корабль был потоплен в сражении.
+Select class as n from ships where name in(select ship from outcomes where result='sunk')   
+union  
+Select ship as n from outcomes  
+where ship not in(Select name from ships) and ship in(Select class from classes) and result='sunk'
+##### #49. Найдите названия кораблей с орудиями калибра 16 дюймов (учесть корабли из таблицы Outcomes).
+Select name as n from ships where class in  (select class from classes where bore = 16)
+union
+select ship as n from outcomes where ship not in (Select name from ships) and ship in (select class from classes where bore = 16)
+##### #50. Найдите сражения, в которых участвовали корабли класса Kongo из таблицы Ships.
+select battle from outcomes o join 
+ships s on
+s.name = o.ship
+where upper(s.class) = 'KONGO'
+group by battle
+##### #51. Найдите названия кораблей, имеющих наибольшее число орудий среди всех имеющихся кораблей такого же водоизмещения (учесть корабли из таблицы Outcomes).
+select NAME from(select name as NAME, displacement, numguns 
+from ships inner join classes on ships.class = classes.class
+union
+select ship as NAME, displacement, numguns from outcomes inner join classes on outcomes.ship= classes.class) as d1 inner join (select displacement, max(numGuns) as numguns from ( select displacement, numguns from ships inner join classes on ships.class = classes.class 
+union
+select displacement, numguns  from outcomes inner join classes on outcomes.ship= classes.class) as f
+group by displacement) as d2 on d1.displacement=d2.displacement and d1.numguns =d2.numguns
+##### #52. Определить названия всех кораблей из таблицы Ships, которые могут быть линейным японским кораблем, имеющим число главных орудий не менее девяти, калибр орудий менее 19 дюймов и водоизмещение не более 65 тыс.тонн
+select distinct s.name 
+from
+ships s, classes c
+where 
+s.class = c.class and c.type = 'bb' and upper(c.country) = 'JAPAN' and (c.numGuns >=9 or c.numGuns is Null) and (c.bore < 19 or c.bore is null) and (c.displacement <= 65000 or c.displacement is NULL)
+##### #53. Определите среднее число орудий для классов линейных кораблей. Получить результат с точностью до 2-х десятичных знаков.
+Select cast(avg(numguns*1.0) as numeric(4,2)) from classes where type = 'bb'
+##### #54. С точностью до 2-х десятичных знаков определите среднее число орудий всех линейных кораблей (учесть корабли из таблицы Outcomes).
+with num as(select ship, type, numguns from classes
+join outcomes on
+classes.class = outcomes.ship
+union
+select name, type, numguns from classes
+join ships on
+classes.class = ships.class)
+select cast(avg(numguns*1.0) as numeric(4,2)) as avg_num from num where type  ='bb'
+##### #55. *OK но сайт не принял* Для каждого класса определите год, когда был спущен на воду первый корабль этого класса. Если год спуска на воду головного корабля неизвестен, определите минимальный год спуска на воду кораблей этого класса. Вывести: класс, год.
+with summ as ((select  class, min(launched) as n from ships group by class)
+union
+(select class, NULL as n from classes where class not in (select name from ships) group by class))
+Select * from summ
+##### #56. Для каждого класса определите число кораблей этого класса, потопленных в сражениях. Вывести: класс и число потопленных кораблей.
+
+##### #57. Для классов, имеющих потери в виде потопленных кораблей и не менее 3 кораблей в базе данных, вывести имя класса и число потопленных кораблей.
+
+##### #58. Для каждого типа продукции и каждого производителя из таблицы Product c точностью до двух десятичных знаков найти процентное отношение числа моделей данного типа данного производителя к общему числу моделей этого производителя. Вывод: maker, type, процентное отношение числа моделей данного типа к общему числу моделей производителя
+
+##### #59. Посчитать остаток денежных средств на каждом пункте приема для базы данных с отчетностью не чаще одного раза в день. Вывод: пункт, остаток.
+1)OK но сайт не принял
+select dd.point , (ISNULL(ss.inc, 0) - ISNULL(dd.out, 0) ) as remain
+from (select point, sum(out) as out from outcome_o group by point) as dd,
+(select point, sum(inc) as inc from income_o group by point) as ss
+where ss.point = dd.point
+2) не мой вариант
+SELECT c1, c2-
+(CASE
+WHEN o2 is null THEN 0
+ELSE o2
+END)
+from
+(SELECT point c1, sum(inc) c2 FROM income_o
+group by point) as t1
+left join
+(SELECT point o1, sum(out) o2 FROM outcome_o
+group by point) as t2
+on c1=o1
+##### #60. Посчитать остаток денежных средств на начало дня 15/04/01 на каждом пункте приема для базы данных с отчетностью не чаще одного раза в день. Вывод: пункт, остаток. Замечание. Не учитывать пункты, информации о которых нет до указанной даты.
+Select point, sum(inc)-isnull((select sum(out) from Outcome_o where point=a.point and date < CONVERT(datetime, '15-04-2001', 105)),0) from Income_o as a
+where date < CONVERT(datetime, '15-04-2001', 105)
+group by point
+##### #61. Посчитать остаток денежных средств на всех пунктах приема для базы данных с отчетностью не чаще одного раза в день.
+Select (ISNULL(ss.inc, 0) - ISNULL(dd.out, 0) ) as ost from
+(select sum(inc) as inc from income_o) as ss,
+(select sum(out) as out from outcome_o) as dd
+##### #62. Посчитать остаток денежных средств на всех пунктах приема на начало дня 15/04/01 для базы данных с отчетностью не чаще одного раза в день.
+Select (ISNULL(ss.inc, 0) - ISNULL(dd.out, 0)) as ost from
+(select sum(inc) as inc from income_o where '2001-04-15' > date) as ss,
+(select sum(out) as out from outcome_o where '2001-04-15' > date) as dd
+##### #63. Определить имена разных пассажиров, когда-либо летевших на одном и том же месте более одного раза.
+select name from passenger where id_psg in (select id_psg from pass_in_trip
+group by place, id_psg
+having count(*)>1)
+##### #64. Используя таблицы Income и Outcome, для каждого пункта приема определить дни, когда был приход, но не было расхода и наоборот. Вывод: пункт, дата, тип операции (inc/out), денежная сумма за день.
+
+##### #65. Пронумеровать уникальные пары {maker, type} из Product, упорядочив их следующим образом: - имя производителя (maker) по возрастанию; - тип продукта (type) в порядке PC, Laptop, Printer. Если некий производитель выпускает несколько типов продукции, то выводить его имя только в первой строке; остальные строки для ЭТОГО производителя должны содержать пустую строку символов ('').
+*OK, НО СПИСАНО ПОЛНОСТЬЮ*
+select row_number() over(order by maker) num, maker2 maker, type from (
+select maker, maker2 = 
+case row_number() over (partition by maker order by case
+when type = 'PC' then 1 
+when type = 'Laptop' then 2
+when type = 'Printer' then 3
+else 4 end)
+when 1 then maker else '' end, type
+from (select distinct maker, type from product) x) y
+##### #66. Для всех дней в интервале с 01/04/2003 по 07/04/2003 определить число рейсов из Rostov. Вывод: дата, количество рейсов
+
+##### #67. Найти количество маршрутов, которые обслуживаются наибольшим числом рейсов. Замечания. 1) A - B и B - A считать РАЗНЫМИ маршрутами. 2) Использовать только таблицу Trip
+select count (*) from
+(select top 1 with ties count(*) as s , town_to, town_from from trip
+group by town_to, town_from
+order by s desc) as t
+##### #68. Найти количество маршрутов, которые обслуживаются наибольшим числом рейсов. Замечания. 1) A - B и B - A считать ОДНИМ И ТЕМ ЖЕ маршрутом. 2) Использовать только таблицу Trip
+
+##### #69. По таблицам Income и Outcome для каждого пункта приема найти остатки денежных средств на конец каждого дня, в который выполнялись операции по приходу и/или расходу на данном пункте. Учесть при этом, что деньги не изымаются, а остатки/задолженность переходят на следующий день. Вывод: пункт приема, день в формате "dd/mm/yyyy", остатки/задолженность на конец этого дня.
+*OK РЕШЕНИЕ НЕ МОЕ, СПИСАНО*
+with t as (
+select point, "date", inc, 0 "out"
+from income
+union all
+select point, "date", 0 inc, "out"
+from outcome
+)
+select point,
+   convert(char(10),"date",103) "date", 
+   (select sum(inc) - sum("out")
+    from t
+    where "date" <= p."date"
+    and point = p.point) rest
+from t p
+group by point, "date"
+order by point, "date"
+##### #70. Укажите сражения, в которых участвовало по меньшей мере три корабля одной и той же страны.
+*ОК  НО НЕ ПРИНИМАЕТСЯ*
+select distinct o.battle
+from outcomes o join ships s
+on o.ship = s.name
+join classes c
+on c.class = s.class
+group by o.battle, c.country
+having count(country) > 2
+##### #71. Найти тех производителей ПК, все модели ПК которых имеются в таблице PC.
+*OK ЧАСТИЧНО СПИСАНО*
+select  p1.maker from product p1
+left join pc p2
+on p1.model = p2.model
+where p1.type = 'pc'
+group by p1.maker
+having count(p1.model) = count(p2.model)
+##### #72. Среди тех, кто пользуется услугами только какой-нибудь одной компании, определить имена разных пассажиров, летавших чаще других. Вывести: имя пассажира и число полетов.
+1) *OK НО СИСТЕМА НЕ ПРИНИМАЕТ РЕШЕНИЕ*
+select top 1 with ties  p.name, count(*) as c  from pass_in_trip pit
+left join passenger p on
+p.id_psg = pit.id_psg
+left join trip t on
+t.trip_no = pit.trip_no
+group by p.name
+order by c desc
+2) *OK*
+select TOP 1 WITH TIES name, c3 from passenger
+join
+(select c1, max(c3) c3 from
+(
+select pass_in_trip.ID_psg c1, Trip.ID_comp c2, count(*) c3 from pass_in_trip
+join trip on trip.trip_no=pass_in_trip.trip_no
+group by pass_in_trip.ID_psg, Trip.ID_comp
+) as t
+group by c1
+having count(*)=1) as tt
+on ID_psg=c1
+order by c3 desc
+##### #73. Для каждой страны определить сражения, в которых не участвовали корабли данной страны. Вывод: страна, сражение
+
+##### #74. Вывести классы всех кораблей России (Russia). Если в базе данных нет классов кораблей России, вывести классы для всех имеющихся в БД стран. Вывод: страна, класс
+*OK НО СИСТЕМА НЕ ПРИНИМАЕТ РЕШЕНИЕ*
+select c.country, c.class from classes c
+left join ships s on
+c.class = s.class
+where c.class in(
+case when country = 'russia' then c.class
+else c.class
+end)
+group by c.country, c.class
+##### #75. Для тех производителей, у которых есть продукты с известной ценой хотя бы в одной из таблиц Laptop, PC, Printer найти максимальные цены на каждый из типов продукции. Вывод: maker, максимальная цена на ноутбуки, максимальная цена на ПК, максимальная цена на принтеры. Для отсутствующих продуктов/цен использовать NULL.
+
+##### #76. Определить время, проведенное в полетах, для пассажиров, летавших всегда на разных местах. Вывод: имя пассажира, время в минутах.
+
+##### #77. Определить дни, когда было выполнено максимальное число рейсов из Ростова ('Rostov'). Вывод: число рейсов, дата.
+select  top 1 with ties count(distinct trip_no) , date from pass_in_trip where trip_no in
+(select trip_no from trip  where town_from = 'rostov')
+group by date
+order by count(distinct trip_no) desc
+##### #78. Для каждого сражения определить первый и последний день месяца, в котором оно состоялось. Вывод: сражение, первый день месяца, последний день месяца. Замечание: даты представить без времени в формате "yyyy-mm-dd".
+select name, convert(date, DATEADD(DAY,1,EOMONTH(date,-1))) as firstD , convert(date, eomonth(date) ) AS lastD from battles
+##### #79. Определить пассажиров, которые больше других времени провели в полетах. Вывод: имя пассажира, общее время в минутах, проведенное в полетах
+
+##### #80. Найти производителей компьютерной техники, у которых нет моделей ПК, не представленных в таблице PC.
+select maker from product
+except
+select maker from product where model not in (select model from pc)
+and type = 'pc'
+##### #81. Из таблицы Outcome получить все записи за тот месяц (месяцы), с учетом года, в котором суммарное значение расхода (out) было максимальным.
+SELECT O.*
+FROM outcome O
+INNER JOIN
+(
+SELECT TOP 1 WITH TIES YEAR(date) AS Y, MONTH(date) AS M, SUM(out) AS ALL_TOTAL
+FROM outcome
+GROUP BY YEAR(date), MONTH(date)
+ORDER BY ALL_TOTAL DESC
+) R ON YEAR(O.date) = R.Y AND MONTH(O.date) = R.M
+##### #82. В наборе записей из таблицы PC, отсортированном по столбцу code (по возрастанию) найти среднее значение цены для каждой шестерки подряд идущих ПК. Вывод: значение code, которое является первым в наборе из шести строк, среднее значение цены в наборе.
+
+##### #83. Определить названия всех кораблей из таблицы Ships, которые удовлетворяют, по крайней мере, комбинации любых четырёх критериев из следующего списка: numGuns = 8, bore = 15, displacement = 32000, type = bb, launched = 1915, class=Kongo, country=USA
+select  name
+from ships s join classes  c on c.class = s.class
+where
+case when numGuns = 8 then 1 else 0 end +
+case when bore = 15 then 1 else 0 end +
+case when displacement = 32000  then 1 else 0 end +
+case when type = 'bb' then 1 else 0 end +
+case when launched = 1915 then 1 else 0 end +
+case when s.class='Kongo' then 1 else 0 end +
+case when country='USA' then 1 else 0 end >= 4
+##### #84. Для каждой компании подсчитать количество перевезенных пассажиров (если они были в этом месяце) по декадам апреля 2003. При этом учитывать только дату вылета. Вывод: название компании, количество пассажиров за каждую декаду
+select company.name,
+sum((case when day(date) >=  1 and day(date) <= 10 then 1 else 0 end) )"1-10",
+sum((case when day(date) >=  11 and day(date) <= 20 then 1 else 0 end) ) "11-20",
+sum((case when day(date) >=  21  and day(date) <= 30 then 1 else 0 end)) "21-30"
+from pass_in_trip
+join trip on trip.trip_no = pass_in_trip.trip_no
+join company on company.id_comp = trip.id_comp
+where month(date) = 4 and year(date) = 2003
+group by company.name
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
